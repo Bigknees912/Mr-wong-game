@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punch the Bald Guy Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            background-color: #fff;
+            border: 2px solid #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game variables
+        let score = 0;
+        let health = 5; // Character's health
+        let glovesPosition = { left: 150, right: 450 };
+        let target = {
+            x: Math.random() * 500 + 50,
+            y: Math.random() * 300 + 50,
+            radius: 30,
+            hurtAnimation: false,
+            hurtFrame: 0,
+            shake: 0,
+            speed: 1.5,
+            knockedOut: false,  // Flag to trigger knockout animation
+            fallY: 50,           // Position for falling effect
+            nameTagOffset: -40   // Offset for the name tag above the character
+        };
+
+        // Sound effects
+        const punchSound = new Audio('https://www.soundjay.com/button/beep-07.wav');
+        const hurtSound = new Audio('https://www.soundjay.com/button/beep-10.wav');
+
+        // Draw Classroom Background
+        function drawClassroomBackground() {
+            // Draw classroom walls
+            ctx.fillStyle = '#f1f1f1';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw windows
+            ctx.fillStyle = '#4e92a3';
+            ctx.fillRect(50, 40, 100, 60);  // Window 1
+            ctx.fillRect(450, 40, 100, 60); // Window 2
+
+            // Draw classroom floor
+            ctx.fillStyle = '#deb887';
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+            // Draw blackboard
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(100, 20, 400, 40); // Blackboard
+
+            // Draw posters
+            ctx.fillStyle = '#ff6347';
+            ctx.fillRect(100, 60, 60, 40); // Poster 1
+            ctx.fillStyle = '#32cd32';
+            ctx.fillRect(450, 60, 60, 40); // Poster 2
+
+            // Draw desks and chairs
+            for (let i = 0; i < 5; i++) {
+                ctx.fillStyle = '#8b4513'; // Desk color
+                ctx.fillRect(150 + i * 80, 230, 60, 20); // Desk
+                ctx.fillStyle = '#a9a9a9'; // Chair color
+                ctx.fillRect(150 + i * 80, 250, 20, 20); // Chair
+            }
+
+            // Draw simple students (rectangles) in the back
+            for (let i = 0; i < 5; i++) {
+                // Student body
+                ctx.fillStyle = '#3498db'; 
+                ctx.fillRect(150 + i * 80, 250, 30, 60); 
+
+                // Head
+                ctx.beginPath();
+                ctx.arc(165 + i * 80, 240, 15, 0, Math.PI * 2); 
+                ctx.fillStyle = 'peachpuff';
+                ctx.fill();
+                ctx.closePath();
+
+                // Student Animation (Nodding)
+                if (i % 2 === 0) { // Nodding effect for even-index students
+                    ctx.beginPath();
+                    ctx.arc(165 + i * 80, 240 + Math.sin(Date.now() / 300 + i) * 2, 15, 0, Math.PI * 2); 
+                    ctx.fillStyle = 'peachpuff';
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            }
+        }
+
+        // Draw gloves
+        function drawGloves() {
+            ctx.beginPath();
+            ctx.arc(glovesPosition.left, 200, 50, 0, Math.PI * 2);
+            ctx.fillStyle = 'blue';
+            ctx.fill();
+            ctx.closePath();
+
+            ctx.beginPath();
+            ctx.arc(glovesPosition.right, 200, 50, 0, Math.PI * 2);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // Draw bald character (target)
+        function drawTarget() {
+            if (target.knockedOut) {
+                // Knockout animation: Character falls down
+                ctx.beginPath();
+                ctx.arc(target.x + target.shake, target.y + target.fallY, target.radius, 0, Math.PI * 2); // Head position during knockout
+                ctx.fillStyle = 'peachpuff';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw eyes closed for knockout effect
+                ctx.beginPath();
+                ctx.arc(target.x + target.shake - 7, target.y + target.fallY - 5, 3, 0, Math.PI * 2); // Left eye (closed)
+                ctx.arc(target.x + target.shake + 7, target.y + target.fallY - 5, 3, 0, Math.PI * 2); // Right eye (closed)
+                ctx.fillStyle = 'black';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw a sad mouth or unconscious line
+                ctx.beginPath();
+                ctx.arc(target.x + target.shake, target.y + target.fallY + 10, 10, 0, Math.PI);
+                ctx.stroke();
+                ctx.closePath();
+
+                return; // Stop further drawing when knockout happens
+            } else {
+                // Draw Name Tag above the character
+                ctx.fillStyle = '#3498db'; // Name tag background color
+                ctx.fillRect(target.x - 30, target.y + target.nameTagOffset - 20, 90, 25); // Background for the name tag
+                ctx.fillStyle = '#fff'; // Text color
+                ctx.font = '16px Arial';
+                ctx.fillText('Mr. Wong', target.x - 20, target.y + target.nameTagOffset); // Draw the text "Mr. Wong"
+
+                ctx.beginPath();
+                ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+                ctx.fillStyle = target.hurtAnimation ? 'red' : 'green';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw face for the bald character
+                ctx.beginPath();
+                ctx.arc(target.x + target.shake, target.y - 15, 20, 0, Math.PI * 2); // Head with shake effect
+                ctx.fillStyle = 'peachpuff';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw eyes
+                ctx.beginPath();
+                ctx.arc(target.x + target.shake - 7, target.y - 20, 3, 0, Math.PI * 2); // Left eye
+                ctx.arc(target.x + target.shake + 7, target.y - 20, 3, 0, Math.PI * 2); // Right eye
+                ctx.fillStyle = 'black';
+                ctx.fill();
+                ctx.closePath();
+
+                // Draw mouth (neutral)
+                ctx.beginPath();
+                ctx.arc(target.x + target.shake, target.y - 10, 10, 0, Math.PI);
+                ctx.stroke();
+                ctx.closePath();
+            }
+        }
+
+        // Draw health bar
+        function drawHealthBar() {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(10, 10, 100, 20); // Background bar
+            ctx.fillStyle = 'green';
+            ctx.fillRect(10, 10, health * 20, 20); // Health bar
+        }
+
+        // Draw score
+        function drawScore() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'black';
+            ctx.fillText('Score: ' + score, 10, 40);
+        }
+
+        // Check if the gloves hit the target
+        function checkHit(x, y) {
+            const distance = Math.sqrt((x - target.x) ** 2 + (y - target.y) ** 2);
+            if (distance < target.radius) {
+                score++;
+                health--; // Decrease health with every hit
+                target.hurtAnimation = true;
+                target.hurtFrame = 0;
+                target.shake = 10; // Trigger shake effect
+                target.x = Math.random() * 500 + 50; // New random position
+                target.y = Math.random() * 300 + 50;
+
+                // Play sound effects
+                punchSound.play();
+                hurtSound.play();
+            }
+        }
+
+        // Update hurt animation and shake effect
+        function updateHurtAnimation() {
+            if (target.hurtAnimation) {
+                target.hurtFrame++;
+                if (target.hurtFrame > 5) {
+                    target.hurtAnimation = false;
+                    target.shake = 0; // Stop shake after hurt animation ends
+                }
+            }
+        }
+
+        // Update target's position based on difficulty
+        function updateTargetSpeed() {
+            if (score > 10) target.speed = 2;
+            if (score > 20) target.speed = 2.5;
+            if (score > 30) target.speed = 3;
+
+            target.x += Math.random() * target.speed - target.speed / 2;
+            target.y += Math.random() * target.speed - target.speed / 2;
+
+            // Keep target within bounds
+            target.x = Math.max(50, Math.min(target.x, 550));
+            target.y = Math.max(50, Math.min(target.y, 350));
+        }
+
+        // Handle mouse clicks
+        canvas.addEventListener('click', (e) => {
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            checkHit(mouseX, mouseY);
+        });
+
+        // Game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawClassroomBackground();
+            drawGloves();
+            drawTarget();
+            drawHealthBar();
+            drawScore();
+            updateHurtAnimation();
+            updateTargetSpeed();
+
+            if (health <= 0 && !target.knockedOut) {
+                target.knockedOut = true; // Trigger knockout animation
+            }
+
+            if (health <= 0 && target.knockedOut) {
+                // Game over after knockout
+                ctx.font = '30px Arial';
+                ctx.fillStyle = 'black';
+                ctx.fillText('Game Over', canvas.width / 2 - 75, canvas.height / 2);
+                return; // End game
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game loop
+        gameLoop();
+    </script>
+</body>
+</html>
